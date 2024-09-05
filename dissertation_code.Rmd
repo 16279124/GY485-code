@@ -1,0 +1,964 @@
+---
+title: "dissertation"
+output: html_document
+date: "2024-06-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, include=FALSE, echo=TRUE, message = FALSE, warning = FALSE}
+# set working directory
+```
+# packages
+```{r, warning=FALSE, include=FALSE}
+if(!require("dplyr")) install.packages("dplyr")
+if(!require("readr")) install.packages("readr")
+if(!require("sf")) install.packages("sf")
+if(!require("sp")) install.packages("sp")
+if(!require("raster")) install.packages("raster")
+if(!require("terra")) install.packages("terra")
+if(!require("exactextractr")) install.packages("exactextractr")
+if(!require("ggplot2")) install.packages("ggplot2")
+if(!require("viridis")) install.packages("viridis")
+if(!require("tmap")) install.packages("tmap")
+if(!require("RColorBrewer")) install.packages("RColorBrewer")
+if(!require("osmdata")) install.packages("osmdata")
+if(!require("ggmap")) install.packages("ggmap")
+if(!require("tidyverse")) install.packages("tidyverse")
+if(!require("spDataLarge")) install.packages("spDataLarge", repos = "https://geocompr.r-universe.dev")
+if(!require("ggspatial")) install.packages("ggspatial")
+if(!require("tidycensus")) install.packages("tidycensus")
+if(!require("gridExtra")) install.packages("gridExtra")
+if(!require("cowplot")) install.packages("cowplot")
+if(!require("biscale")) install.packages("biscale")
+```
+```{r include=FALSE}
+library(readxl)
+library(readr)
+library(dplyr)
+library(fixest)
+library(stringr)
+library(sf)
+library(sp)
+library(raster)
+library(ggplot2)
+library(viridis)
+library(tmap)
+library(RColorBrewer)
+library(ggmap)
+library(tidyverse)
+library(ggspatial)
+library(plm)
+library(data.table)
+library(pglm)
+library(MASS)
+```
+
+# data preparation
+## folder path
+```{r}
+path_to_folder <- "/Users/wangyue/Desktop/dissertation_data/"
+```
+
+## shenzhen shapefile
+```{r, message=FALSE, warning=FALSE}
+shenzhen <- st_read(paste0(path_to_folder, "/shenzhen/440300.shp") )
+shenzhen <- shenzhen %>%
+  dplyr::select(id, name, geometry)
+
+shenzhen <- st_set_crs(shenzhen, 4547)
+
+ggplot(data = shenzhen) +
+  geom_sf(fill = NA, color = "black") +  
+  theme_minimal()  +
+   theme(line = element_blank(), 
+        axis.text=element_blank())
+```
+
+## poi data (Cainiao stations)
+import shapefile
+```{r, include=FALSE}
+poi2013 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2013poi.shp"))
+poi2014 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2014poi.shp"))
+poi2015 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2015poi.shp"))
+poi2016 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2016poi.shp"))
+poi2017 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2017poi.shp"))
+poi2018 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2018poi.shp"))
+poi2019 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2019poi.shp"))
+poi2020 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2020poi.shp"))
+poi2021 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2021poi.shp"))
+poi2022 <- st_read(paste0(path_to_folder, "/shenzhen_poi/shp/2022poi.shp"))
+
+poi2013 <- st_transform(poi2013, crs = 4547)
+poi2014 <- st_transform(poi2014, crs = 4547)
+poi2015 <- st_transform(poi2015, crs = 4547)
+poi2016 <- st_transform(poi2016, crs = 4547)
+poi2017 <- st_transform(poi2017, crs = 4547)
+poi2018 <- st_transform(poi2018, crs = 4547)
+poi2019 <- st_transform(poi2019, crs = 4547)
+poi2020 <- st_transform(poi2020, crs = 4547)
+poi2021 <- st_transform(poi2021, crs = 4547)
+poi2022 <- st_transform(poi2022, crs = 4547)
+```
+
+### filter poi data
+```{r, warning=FALSE}
+poi2013 <- poi2013 %>%
+  dplyr::select(name, adname, adcode, geometry)
+
+poi2014 <- poi2014 %>%
+  dplyr::select(NAME, COUNTY, CODE, geometry) %>%
+  rename(name = NAME, adname = COUNTY, adcode = CODE)
+
+poi2015 <- poi2015 %>%
+  dplyr::select(NAME, COUNTY, CODE, geometry) %>%
+  rename(name = NAME, adname = COUNTY, adcode = CODE)
+
+poi2016 <- poi2016 %>%
+  dplyr::select(NAME, COUNTY, CODE, geometry) %>%
+  rename(name = NAME, adname = COUNTY, adcode = CODE)
+
+poi2017 <- poi2017 %>%
+  dplyr::select(name, adname, adcode, geometry) %>%
+    filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站"))
+
+poi2018 <- poi2018 %>%
+  filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站") | str_detect(name, "智能柜")) %>%
+  dplyr::select(name, adname, adcode, geometry) 
+
+poi2019 <- poi2019 %>%
+  filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站") | str_detect(name, "智能柜")) %>%
+  dplyr::select(name, adname, adcode, geometry) 
+
+poi2020 <- poi2020 %>%
+  filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站") | str_detect(name, "智能柜") | str_detect(name, "速递易柜")) %>%
+  dplyr::select(name, adname, adcode, geometry) 
+
+poi2021 <- poi2021 %>%
+  filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站") | str_detect(name, "智能柜") | str_detect(name, "速递易柜") | str_detect(name, "快递超市")) %>%
+  dplyr::select(name, adname, adcode, geometry)
+
+poi2022 <- poi2022 %>%
+  filter(str_detect(name, "菜鸟") | str_detect(name, "自提柜") | str_detect(name, "快递柜") | str_detect(name, "驿站") | str_detect(name, "智能柜") | str_detect(name, "速递易柜") | str_detect(name, "快递超市") | str_detect(name, "快递点") | str_detect(name, "送货柜")) %>%
+  dplyr::select(name, adname, adcode, geometry) 
+```
+
+## nighttime light data
+###Li(2020)
+####2013
+```{r, warning=FALSE}
+Li2013 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2013.tif"))
+Li2013 <- crop(Li2013, shenzhen)
+Li2013 <- mask(Li2013, shenzhen)
+
+Li2013_df <- as.data.frame(Li2013, xy = TRUE, na.rm = TRUE)
+names(Li2013_df)[3] <- "value"  
+
+Li2013_df <- Li2013_df %>%
+  filter(value > 7)
+
+Li2013_map <- ggplot() +
+  geom_raster(data = Li2013_df, aes(x = x, y = y, fill = value)) +
+  scale_fill_gradientn(
+    colors = c("white", "lightblue", "blue", "darkblue"),
+    values = scales::rescale(c(0, 30, 50, 60, 63)),  
+    limits = c(min(0), max(Li2013_df$value, na.rm = TRUE)),
+    oob = scales::squish
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)  # Center the title
+  ) +
+  labs(fill = "DN values") +
+  ggtitle("Nighttime Light Value in 2013") 
+Li2013_map
+```
+
+####2014
+```{r, warning=FALSE}
+Li2014 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2014.tif"))
+Li2014 <- crop(Li2014, shenzhen)
+Li2014 <- mask(Li2014, shenzhen)
+
+Li2014_df <- as.data.frame(Li2014, xy = TRUE, na.rm = TRUE)
+names(Li2014_df)[3] <- "value"  
+Li2014_df <- Li2014_df %>%
+  filter(value > 7)
+```
+
+####2015
+```{r, warning=FALSE}
+Li2015 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2015.tif"))
+Li2015 <- crop(Li2015, shenzhen)
+Li2015 <- mask(Li2015, shenzhen)
+
+Li2015_df <- as.data.frame(Li2015, xy = TRUE, na.rm = TRUE)
+names(Li2015_df)[3] <- "value"  
+Li2015_df <- Li2015_df %>%
+  filter(value > 7)
+```
+
+#### 2016
+```{r, warning=FALSE}
+Li2016 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2016.tif"))
+Li2016 <- crop(Li2016, shenzhen)
+Li2016 <- mask(Li2016, shenzhen)
+
+Li2016_df <- as.data.frame(Li2016, xy = TRUE, na.rm = TRUE)
+names(Li2016_df)[3] <- "value"  
+Li2016_df <- Li2016_df %>%
+  filter(value > 7)
+
+Li2016_map <- ggplot() +
+  geom_raster(data = Li2016_df, aes(x = x, y = y, fill = value)) +
+  scale_fill_gradientn(
+    colors = c("white", "lightblue", "blue", "darkblue"),
+    values = scales::rescale(c(0, 30, 50, 60, 63)),  
+    limits = c(min(0), max(Li2016_df$value, na.rm = TRUE)),
+    oob = scales::squish
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5) 
+  ) +
+  labs(fill = "DN values") +
+  ggtitle("Nighttime Light Value in 2016")
+Li2016_map
+```
+
+
+####2017
+```{r, warning=FALSE}
+Li2017 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2017.tif"))
+Li2017 <- crop(Li2017, shenzhen)
+Li2017 <- mask(Li2017, shenzhen)
+
+Li2017_df <- as.data.frame(Li2017, xy = TRUE, na.rm = TRUE)
+names(Li2017_df)[3] <- "value"  
+Li2017_df <- Li2017_df %>%
+  filter(value > 7)
+```
+
+####2018
+```{r, warning=FALSE}
+Li2018 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2018.tif"))
+Li2018 <- crop(Li2018, shenzhen)
+Li2018 <- mask(Li2018, shenzhen)
+
+Li2018_df <- as.data.frame(Li2018, xy = TRUE, na.rm = TRUE)
+names(Li2018_df)[3] <- "value"  
+Li2018_df <- Li2018_df %>%
+  filter(value > 7)
+```
+
+#### 2019
+```{r, warning=FALSE,message=FALSE}
+Li2019 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2019.tif"))
+Li2019 <- crop(Li2019, shenzhen)
+Li2019 <- mask(Li2019, shenzhen)
+
+Li2019_df <- as.data.frame(Li2019, xy = TRUE, na.rm = TRUE)
+names(Li2019_df)[3] <- "value"  
+Li2019_df <- Li2019_df %>%
+  filter(value > 7)
+
+Li2019_map <- ggplot() +
+  geom_raster(data = Li2019_df, aes(x = x, y = y, fill = value)) +
+  scale_fill_gradientn(
+    colors = c("white", "lightblue", "blue", "darkblue"),
+    values = scales::rescale(c(0, 30, 50, 60, 63)), 
+    limits = c(min(0), max(Li2019_df$value, na.rm = TRUE)),
+    oob = scales::squish
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)  # Center the title
+  ) +
+  labs(fill = "DN values") +
+  ggtitle("Nighttime Light Value in 2019")
+Li2019_map
+```
+
+
+####2020
+```{r, warning=FALSE}
+Li2020 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2020.tif"))
+Li2020 <- crop(Li2020, shenzhen)
+Li2020 <- mask(Li2020, shenzhen)
+
+Li2020_df <- as.data.frame(Li2020, xy = TRUE, na.rm = TRUE)
+names(Li2020_df)[3] <- "value"  
+Li2020_df <- Li2020_df %>%
+  filter(value > 7)
+```
+
+####2021
+```{r, warning=FALSE}
+Li2021 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2021.tif"))
+Li2021 <- crop(Li2021, shenzhen)
+Li2021 <- mask(Li2021, shenzhen)
+
+Li2021_df <- as.data.frame(Li2021, xy = TRUE, na.rm = TRUE)
+names(Li2021_df)[3] <- "value"  
+Li2021_df <- Li2021_df %>%
+  filter(value > 7)
+```
+
+#### 2022
+```{r, warning=FALSE}
+Li2022 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2022.tif"))
+Li2022 <- crop(Li2022, shenzhen)
+Li2022 <- mask(Li2022, shenzhen)
+
+Li2022_df <- as.data.frame(Li2022, xy = TRUE, na.rm = TRUE)
+names(Li2022_df)[3] <- "value"  
+Li2022_df <- Li2022_df %>%
+  filter(value > 7)
+
+Li2022_map <- ggplot() +
+  geom_raster(data = Li2022_df, aes(x = x, y = y, fill = value)) +
+  scale_fill_gradientn(
+    colors = c("white", "lightblue", "blue", "darkblue"),
+    values = scales::rescale(c(0, 30, 50, 60, 63)), 
+    limits = c(min(0), max(Li2022_df$value, na.rm = TRUE)),
+    oob = scales::squish
+  ) +
+  coord_sf() +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5)  
+  ) +
+  labs(fill = "DN values") +
+  ggtitle("Nighttime Light Value in 2022")
+Li2022_map
+```
+
+
+##  measurement of parcel stations
+### nearest distance to parcel stations
+```{r}
+Li2013 <- rasterToPoints(Li2013, spatial = TRUE)
+Li2013 <- st_as_sf(Li2013)
+Li2013 <- st_transform(Li2013, crs = 4547)
+names(Li2013)[1] <- "value"  
+Li2013 <- Li2013 %>%
+  filter(value > 7)
+
+
+Li2014 <- rasterToPoints(Li2014, spatial = TRUE)
+Li2014 <- st_as_sf(Li2014)
+Li2014 <- st_transform(Li2014, crs = 4547)
+names(Li2014)[1] <- "value"  
+Li2014 <- Li2014 %>%
+  filter(value > 7)
+
+Li2015 <- rasterToPoints(Li2015, spatial = TRUE)
+Li2015 <- st_as_sf(Li2015)
+Li2015 <- st_transform(Li2015, crs = 4547)
+names(Li2015)[1] <- "value"  
+Li2015 <- Li2015 %>%
+  filter(value > 7)
+
+Li2016 <- rasterToPoints(Li2016, spatial = TRUE)
+Li2016 <- st_as_sf(Li2016)
+Li2016 <- st_transform(Li2016, crs = 4547)
+names(Li2016)[1] <- "value"  
+Li2016 <- Li2016 %>%
+  filter(value > 7)
+
+Li2017 <- rasterToPoints(Li2017, spatial = TRUE)
+Li2017 <- st_as_sf(Li2017)
+Li2017 <- st_transform(Li2017, crs = 4547)
+names(Li2017)[1] <- "value"  
+Li2017 <- Li2017 %>%
+  filter(value > 7)
+
+Li2018 <- rasterToPoints(Li2018, spatial = TRUE)
+Li2018 <- st_as_sf(Li2018)
+Li2018 <- st_transform(Li2018, crs = 4547)
+names(Li2018)[1] <- "value"  
+Li2018 <- Li2018 %>%
+  filter(value > 7)
+
+Li2019 <- rasterToPoints(Li2019, spatial = TRUE)
+Li2019 <- st_as_sf(Li2019)
+Li2019 <- st_transform(Li2019, crs = 4547)
+names(Li2019)[1] <- "value"  
+Li2019 <- Li2019 %>%
+  filter(value > 7)
+
+Li2020 <- rasterToPoints(Li2020, spatial = TRUE)
+Li2020 <- st_as_sf(Li2020)
+Li2020 <- st_transform(Li2020, crs = 4547)
+names(Li2020)[1] <- "value"  
+Li2020 <- Li2020 %>%
+  filter(value > 7)
+
+Li2021 <- rasterToPoints(Li2021, spatial = TRUE)
+Li2021 <- st_as_sf(Li2021)
+Li2021 <- st_transform(Li2021, crs = 4547)
+names(Li2021)[1] <- "value"  
+Li2021 <- Li2021 %>%
+  filter(value > 7)
+
+Li2022 <- rasterToPoints(Li2022, spatial = TRUE)
+Li2022 <- st_as_sf(Li2022)
+Li2022 <- st_transform(Li2022, crs = 4547)
+names(Li2022)[1] <- "value"  
+Li2022 <- Li2022 %>%
+  filter(value > 7)
+```
+
+```{r}
+distances <- st_distance(Li2013, poi2013, by_element = FALSE)
+Li2013$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2014, poi2014, by_element = FALSE)
+Li2014$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2015, poi2015, by_element = FALSE)
+Li2015$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2016, poi2016, by_element = FALSE)
+Li2016$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2017, poi2017, by_element = FALSE)
+Li2017$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2018, poi2018, by_element = FALSE)
+Li2018$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2019, poi2019, by_element = FALSE)
+Li2019$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2020, poi2020, by_element = FALSE)
+Li2020$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2021, poi2021, by_element = FALSE)
+Li2021$nearest_station_distance <- apply(distances, 1, min)
+
+distances <- st_distance(Li2022, poi2022, by_element = FALSE)
+Li2022$nearest_station_distance <- apply(distances, 1, min)
+```
+
+```{r}
+Li2013 <- Li2013 %>%
+  rename(ntl = value)
+Li2013$year <- 2013
+
+Li2014 <- Li2014 %>%
+  rename(ntl = value)
+Li2014$year <- 2014
+
+Li2015 <- Li2015 %>%
+  rename(ntl = value)
+Li2015$year <- 2015
+
+Li2016 <- Li2016 %>%
+  rename(ntl = value)
+Li2016$year <- 2016
+
+Li2017 <- Li2017 %>%
+  rename(ntl = value)
+Li2017$year <- 2017
+
+Li2018 <- Li2018 %>%
+  rename(ntl = value)
+Li2018$year <- 2018
+
+Li2019 <- Li2019 %>%
+  rename(ntl = value)
+Li2019$year <- 2019
+
+Li2020 <- Li2020 %>%
+  rename(ntl = value)
+Li2020$year <- 2020
+
+Li2021 <- Li2021 %>%
+  rename(ntl = value)
+Li2021$year <- 2021
+
+Li2022 <- Li2022 %>%
+  rename(ntl = value)
+Li2022$year <- 2022
+```
+
+```{r}
+nearest_dis <- bind_rows(Li2013, Li2014, Li2015, Li2016, Li2017, Li2018, Li2019, Li2020, Li2021, Li2022)
+```
+
+### buffer
+##### re-load dataset
+```{r}
+Li2013 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2013.tif"))
+Li2013 <- crop(Li2013, shenzhen)
+Li2013 <- mask(Li2013, shenzhen)
+Li2013 <- rasterToPoints(Li2013, spatial = TRUE)
+Li2013 <- st_as_sf(Li2013)
+Li2013 <- st_transform(Li2013, crs = 4547)
+names(Li2013)[1] <- "value"  
+Li2013 <- Li2013 %>%
+  filter(value > 7)
+
+Li2014 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2014.tif"))
+Li2014 <- crop(Li2014, shenzhen)
+Li2014 <- mask(Li2014, shenzhen)
+Li2014 <- rasterToPoints(Li2014, spatial = TRUE)
+Li2014 <- st_as_sf(Li2014)
+Li2014 <- st_transform(Li2014, crs = 4547)
+names(Li2014)[1] <- "value"  
+Li2014 <- Li2014 %>%
+  filter(value > 7)
+
+Li2015 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2015.tif"))
+Li2015 <- crop(Li2015, shenzhen)
+Li2015 <- mask(Li2015, shenzhen)
+Li2015 <- rasterToPoints(Li2015, spatial = TRUE)
+Li2015 <- st_as_sf(Li2015)
+Li2015 <- st_transform(Li2015, crs = 4547)
+names(Li2015)[1] <- "value"  
+Li2015 <- Li2015 %>%
+  filter(value > 7)
+
+Li2016 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2016.tif"))
+Li2016 <- crop(Li2016, shenzhen)
+Li2016 <- mask(Li2016, shenzhen)
+Li2016 <- rasterToPoints(Li2016, spatial = TRUE)
+Li2016 <- st_as_sf(Li2016)
+Li2016 <- st_transform(Li2016, crs = 4547)
+names(Li2016)[1] <- "value"  
+Li2016 <- Li2016 %>%
+  filter(value > 7)
+
+Li2017 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2017.tif"))
+Li2017 <- crop(Li2017, shenzhen)
+Li2017 <- mask(Li2017, shenzhen)
+Li2017 <- rasterToPoints(Li2017, spatial = TRUE)
+Li2017 <- st_as_sf(Li2017)
+Li2017 <- st_transform(Li2017, crs = 4547)
+names(Li2017)[1] <- "value"  
+Li2017 <- Li2017 %>%
+  filter(value > 7)
+
+Li2018 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2018.tif"))
+Li2018 <- crop(Li2018, shenzhen)
+Li2018 <- mask(Li2018, shenzhen)
+Li2018 <- rasterToPoints(Li2018, spatial = TRUE)
+Li2018 <- st_as_sf(Li2018)
+Li2018 <- st_transform(Li2018, crs = 4547)
+names(Li2018)[1] <- "value"  
+Li2018 <- Li2018 %>%
+  filter(value > 7)
+
+Li2019 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2019.tif"))
+Li2019 <- crop(Li2019, shenzhen)
+Li2019 <- mask(Li2019, shenzhen)
+Li2019 <- rasterToPoints(Li2019, spatial = TRUE)
+Li2019 <- st_as_sf(Li2019)
+Li2019 <- st_transform(Li2019, crs = 4547)
+names(Li2019)[1] <- "value"  
+Li2019 <- Li2019 %>%
+  filter(value > 7)
+
+Li2020 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2020.tif"))
+Li2020 <- crop(Li2020, shenzhen)
+Li2020 <- mask(Li2020, shenzhen)
+Li2020 <- rasterToPoints(Li2020, spatial = TRUE)
+Li2020 <- st_as_sf(Li2020)
+Li2020 <- st_transform(Li2020, crs = 4547)
+names(Li2020)[1] <- "value"  
+Li2020 <- Li2020 %>%
+  filter(value > 7)
+
+Li2021 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2021.tif"))
+Li2021 <- crop(Li2021, shenzhen)
+Li2021 <- mask(Li2021, shenzhen)
+Li2021 <- rasterToPoints(Li2021, spatial = TRUE)
+Li2021 <- st_as_sf(Li2021)
+Li2021 <- st_transform(Li2021, crs = 4547)
+names(Li2021)[1] <- "value"  
+Li2021 <- Li2021 %>%
+  filter(value > 7)
+
+Li2022 <- raster(paste0(path_to_folder, "/nighttime_light/Li2020/2022.tif"))
+Li2022 <- crop(Li2022, shenzhen)
+Li2022 <- mask(Li2022, shenzhen)
+Li2022 <- rasterToPoints(Li2022, spatial = TRUE)
+Li2022 <- st_as_sf(Li2022)
+Li2022 <- st_transform(Li2022, crs = 4547)
+names(Li2022)[1] <- "value"  
+Li2022 <- Li2022 %>%
+  filter(value > 7)
+```
+
+```{r}
+Li2013 <- Li2013 %>%
+  rename(ntl = value)
+Li2013$year <- 2013
+
+Li2014 <- Li2014 %>%
+  rename(ntl = value)
+Li2014$year <- 2014
+
+Li2015 <- Li2015 %>%
+  rename(ntl = value)
+Li2015$year <- 2015
+
+Li2016 <- Li2016 %>%
+  rename(ntl = value)
+Li2016$year <- 2016
+
+Li2017 <- Li2017 %>%
+  rename(ntl = value)
+Li2017$year <- 2017
+
+Li2018 <- Li2018 %>%
+  rename(ntl = value)
+Li2018$year <- 2018
+
+Li2019 <- Li2019 %>%
+  rename(ntl = value)
+Li2019$year <- 2019
+
+Li2020 <- Li2020 %>%
+  rename(ntl = value)
+Li2020$year <- 2020
+
+Li2021 <- Li2021 %>%
+  rename(ntl = value)
+Li2021$year <- 2021
+
+Li2022 <- Li2022 %>%
+  rename(ntl = value)
+Li2022$year <- 2022
+```
+
+##### k = 1
+```{r}
+buffer_dist <- 1000
+Li2013_k1 <- st_buffer(Li2013, dist = buffer_dist)
+Li2013_k1$buffer_id <- 1:nrow(Li2013_k1)
+buffer_cainiao <- st_intersects(Li2013_k1, poi2013) %>%lengths()
+Li2013_k1$parcel_station_count <- buffer_cainiao
+
+Li2014_k1 <- st_buffer(Li2014, dist = buffer_dist)
+Li2014_k1$buffer_id <- 1:nrow(Li2014_k1)
+buffer_cainiao <- st_intersects(Li2014_k1, poi2014) %>% lengths()
+Li2014_k1$parcel_station_count <- buffer_cainiao
+
+Li2015_k1 <- st_buffer(Li2015, dist = buffer_dist)
+Li2015_k1$buffer_id <- 1:nrow(Li2015_k1)
+buffer_cainiao <- st_intersects(Li2015_k1, poi2015) %>%lengths()
+Li2015_k1$parcel_station_count <- buffer_cainiao
+
+Li2016_k1 <- st_buffer(Li2016, dist = buffer_dist)
+Li2016_k1$buffer_id <- 1:nrow(Li2016_k1)
+buffer_cainiao <- st_intersects(Li2016_k1, poi2016) %>%lengths()
+Li2016_k1$parcel_station_count <- buffer_cainiao
+
+Li2017_k1 <- st_buffer(Li2017, dist = buffer_dist)
+Li2017_k1$buffer_id <- 1:nrow(Li2017_k1)
+buffer_cainiao <- st_intersects(Li2017_k1, poi2017) %>%lengths()
+Li2017_k1$parcel_station_count <- buffer_cainiao
+
+Li2018_k1 <- st_buffer(Li2018, dist = buffer_dist)
+Li2018_k1$buffer_id <- 1:nrow(Li2018_k1)
+buffer_cainiao <- st_intersects(Li2018_k1, poi2018) %>%lengths()
+Li2018_k1$parcel_station_count <- buffer_cainiao
+
+Li2019_k1 <- st_buffer(Li2019, dist = buffer_dist)
+Li2019_k1$buffer_id <- 1:nrow(Li2019_k1)
+buffer_cainiao <- st_intersects(Li2019_k1, poi2019) %>%lengths()
+Li2019_k1$parcel_station_count <- buffer_cainiao
+
+Li2020_k1 <- st_buffer(Li2020, dist = buffer_dist)
+Li2020_k1$buffer_id <- 1:nrow(Li2020_k1)
+buffer_cainiao <- st_intersects(Li2020_k1, poi2020) %>%lengths()
+Li2020_k1$parcel_station_count <- buffer_cainiao
+
+Li2021_k1 <- st_buffer(Li2021, dist = buffer_dist)
+Li2021_k1$buffer_id <- 1:nrow(Li2021_k1)
+buffer_cainiao <- st_intersects(Li2021_k1, poi2021) %>%lengths()
+Li2021_k1$parcel_station_count <- buffer_cainiao
+
+Li2022_k1 <- st_buffer(Li2022, dist = buffer_dist)
+Li2022_k1$buffer_id <- 1:nrow(Li2022_k1)
+buffer_cainiao <- st_intersects(Li2022_k1, poi2022) %>%lengths()
+Li2022_k1$parcel_station_count <- buffer_cainiao
+```
+##### k = 3
+```{r}
+buffer_dist <- 3000
+Li2013_k3 <- st_buffer(Li2013, dist = buffer_dist)
+Li2013_k3$buffer_id <- 1:nrow(Li2013_k3)
+buffer_cainiao <- st_intersects(Li2013_k3, poi2013) %>%lengths()
+Li2013_k3$parcel_station_count <- buffer_cainiao
+
+Li2014_k3 <- st_buffer(Li2014, dist = buffer_dist)
+Li2014_k3$buffer_id <- 1:nrow(Li2014_k3)
+buffer_cainiao <- st_intersects(Li2014_k3, poi2014) %>%lengths()
+Li2014_k3$parcel_station_count <- buffer_cainiao
+
+Li2015_k3 <- st_buffer(Li2015, dist = buffer_dist)
+Li2015_k3$buffer_id <- 1:nrow(Li2015_k3)
+buffer_cainiao <- st_intersects(Li2015_k3, poi2015) %>%lengths()
+Li2015_k3$parcel_station_count <- buffer_cainiao
+
+Li2016_k3 <- st_buffer(Li2016, dist = buffer_dist)
+Li2016_k3$buffer_id <- 1:nrow(Li2016_k3)
+buffer_cainiao <- st_intersects(Li2016_k3, poi2016) %>%lengths()
+Li2016_k3$parcel_station_count <- buffer_cainiao
+
+Li2017_k3 <- st_buffer(Li2017, dist = buffer_dist)
+Li2017_k3$buffer_id <- 1:nrow(Li2017_k3)
+buffer_cainiao <- st_intersects(Li2017_k3, poi2017) %>%lengths()
+Li2017_k3$parcel_station_count <- buffer_cainiao
+
+Li2018_k3 <- st_buffer(Li2018, dist = buffer_dist)
+Li2018_k3$buffer_id <- 1:nrow(Li2018_k3)
+buffer_cainiao <- st_intersects(Li2018_k3, poi2018) %>%lengths()
+Li2018_k3$parcel_station_count <- buffer_cainiao
+
+Li2019_k3 <- st_buffer(Li2019, dist = buffer_dist)
+Li2019_k3$buffer_id <- 1:nrow(Li2019_k3)
+buffer_cainiao <- st_intersects(Li2019_k3, poi2019) %>%lengths()
+Li2019_k3$parcel_station_count <- buffer_cainiao
+
+Li2020_k3 <- st_buffer(Li2020, dist = buffer_dist)
+Li2020_k3$buffer_id <- 1:nrow(Li2020_k3)
+buffer_cainiao <- st_intersects(Li2020_k3, poi2020) %>%lengths()
+Li2020_k3$parcel_station_count <- buffer_cainiao
+
+Li2021_k3 <- st_buffer(Li2021, dist = buffer_dist)
+Li2021_k3$buffer_id <- 1:nrow(Li2021_k3)
+buffer_cainiao <- st_intersects(Li2021_k3, poi2021) %>%lengths()
+Li2021_k3$parcel_station_count <- buffer_cainiao
+
+Li2022_k3 <- st_buffer(Li2022, dist = buffer_dist)
+Li2022_k3$buffer_id <- 1:nrow(Li2022_k3)
+buffer_cainiao <- st_intersects(Li2022_k3, poi2022) %>%lengths()
+Li2022_k3$parcel_station_count <- buffer_cainiao
+```
+
+##### k = 5
+```{r}
+buffer_dist <- 5000
+Li2013_k5 <- st_buffer(Li2013, dist = buffer_dist)
+Li2013_k5$buffer_id <- 1:nrow(Li2013_k5)
+buffer_cainiao <- st_intersects(Li2013_k5, poi2013) %>%lengths()
+Li2013_k5$parcel_station_count <- buffer_cainiao
+
+Li2014_k5 <- st_buffer(Li2014, dist = buffer_dist)
+Li2014_k5$buffer_id <- 1:nrow(Li2014_k5)
+buffer_cainiao <- st_intersects(Li2014_k5, poi2014) %>%lengths()
+Li2014_k5$parcel_station_count <- buffer_cainiao
+
+Li2015_k5 <- st_buffer(Li2015, dist = buffer_dist)
+Li2015_k5$buffer_id <- 1:nrow(Li2015_k5)
+buffer_cainiao <- st_intersects(Li2015_k5, poi2015) %>%lengths()
+Li2015_k5$parcel_station_count <- buffer_cainiao
+
+Li2016_k5 <- st_buffer(Li2016, dist = buffer_dist)
+Li2016_k5$buffer_id <- 1:nrow(Li2016_k5)
+buffer_cainiao <- st_intersects(Li2016_k5, poi2016) %>%lengths()
+Li2016_k5$parcel_station_count <- buffer_cainiao
+
+Li2017_k5 <- st_buffer(Li2017, dist = buffer_dist)
+Li2017_k5$buffer_id <- 1:nrow(Li2017_k5)
+buffer_cainiao <- st_intersects(Li2017_k5, poi2017) %>%lengths()
+Li2017_k5$parcel_station_count <- buffer_cainiao
+
+Li2018_k5 <- st_buffer(Li2018, dist = buffer_dist)
+Li2018_k5$buffer_id <- 1:nrow(Li2018_k5)
+buffer_cainiao <- st_intersects(Li2018_k5, poi2018) %>%lengths()
+Li2018_k5$parcel_station_count <- buffer_cainiao
+
+Li2019_k5 <- st_buffer(Li2019, dist = buffer_dist)
+Li2019_k5$buffer_id <- 1:nrow(Li2019_k5)
+buffer_cainiao <- st_intersects(Li2019_k5, poi2019) %>%lengths()
+Li2019_k5$parcel_station_count <- buffer_cainiao
+
+Li2020_k5 <- st_buffer(Li2020, dist = buffer_dist)
+Li2020_k5$buffer_id <- 1:nrow(Li2020_k5)
+buffer_cainiao <- st_intersects(Li2020_k5, poi2020) %>%lengths()
+Li2020_k5$parcel_station_count <- buffer_cainiao
+
+Li2021_k5 <- st_buffer(Li2021, dist = buffer_dist)
+Li2021_k5$buffer_id <- 1:nrow(Li2021_k5)
+buffer_cainiao <- st_intersects(Li2021_k5, poi2021) %>%lengths()
+Li2021_k5$parcel_station_count <- buffer_cainiao
+
+Li2022_k5 <- st_buffer(Li2022, dist = buffer_dist)
+Li2022_k5$buffer_id <- 1:nrow(Li2022_k5)
+buffer_cainiao <- st_intersects(Li2022_k5, poi2022) %>%lengths()
+Li2022_k5$parcel_station_count <- buffer_cainiao
+```
+
+##### combine dataset
+```{r}
+buffer_k1 <- bind_rows(Li2013_k1, Li2014_k1, Li2015_k1, Li2016_k1, Li2017_k1, Li2018_k1, Li2019_k1, Li2020_k1, Li2021_k1, Li2022_k1)
+buffer_k1$nearest_station_distance <- nearest_dis$nearest_station_distance
+
+buffer_k3 <- bind_rows(Li2013_k3, Li2014_k3, Li2015_k3, Li2016_k3, Li2017_k3, Li2018_k3, Li2019_k3, Li2020_k3, Li2021_k3, Li2022_k3)
+
+buffer_k5 <- bind_rows(Li2013_k5, Li2014_k5, Li2015_k5, Li2016_k5, Li2017_k5, Li2018_k5, Li2019_k5, Li2020_k5, Li2021_k5, Li2022_k5)
+```
+
+# OLS
+```{r}
+OLS_k1 <- lm(ntl ~ parcel_station_count, data = buffer_k1)
+OLS_k3 <- lm(ntl ~ parcel_station_count, data = buffer_k3)
+OLS_k5 <- lm(ntl ~ parcel_station_count, data = buffer_k5)
+
+OLS_nearest <- lm(ntl ~ nearest_station_distance, data = nearest_dis)
+
+summary(OLS_nearest)
+summary(OLS_k1)
+summary(OLS_k3)
+summary(OLS_k5)
+```
+
+# panel data
+```{r}
+panel_data_k1 <- pdata.frame(buffer_k1, index = c("buffer_id", "year"))
+panel_data_k3 <- pdata.frame(buffer_k3, index = c("buffer_id", "year"))
+panel_data_k5 <- pdata.frame(buffer_k5, index = c("buffer_id", "year"))
+```
+
+## fixed effects
+panel_k1 <- plm(ntl ~ parcel_station_count + factor(year), data = panel_data_k1, model = "within")
+panel_k3 <- plm(ntl ~ parcel_station_count + factor(year), data = panel_data_k3, model = "within")
+panel_k5 <- plm(ntl ~ parcel_station_count + factor(year), data = panel_data_k5, model = "within")
+
+panel_nearest <- plm(ntl ~ nearest_station_distance + factor(year), data = panel_data_k1, model = "within")
+
+summary(panel_k1)
+summary(panel_k3)
+summary(panel_k5)
+summary(panel_nearest)
+
+limitation: parcel station count is too small for the panel data analysis. Not suitable in this model. 
+```{r}
+panel_nearest <- plm(ntl ~ nearest_station_distance + factor(year), data = panel_data_k1, model = "within")
+summary(panel_nearest)
+```
+
+## count data
+Negative Binomial Regression
+```{r}
+mean_value <- mean(panel_data_k1$parcel_station_count, na.rm = TRUE)
+variance_value <- var(panel_data_k1$parcel_station_count, na.rm = TRUE)
+
+mean_value
+variance_value
+summary(panel_data_k1$parcel_station_count)
+```
+
+
+```{r}
+# Negative Binomial Regression
+negbin_k1 <- fenegbin(ntl ~ parcel_station_count | year, data = panel_data_k1)
+negbin_k3 <- fenegbin(ntl ~ parcel_station_count | year, data = panel_data_k3)
+negbin_k5 <- fenegbin(ntl ~ parcel_station_count | year, data = panel_data_k5)
+
+summary(negbin_k1)
+summary(negbin_k3)
+summary(negbin_k5)
+```
+
+# pooled OLS
+```{r}
+buffer_k1$buffer_id <- as.factor(buffer_k1$buffer_id)
+buffer_k1$year <- as.factor(buffer_k1$year)
+
+buffer_k3$buffer_id <- as.factor(buffer_k3$buffer_id)
+buffer_k3$year <- as.factor(buffer_k3$year)
+
+buffer_k5$buffer_id <- as.factor(buffer_k5$buffer_id)
+buffer_k5$year <- as.factor(buffer_k5$year)
+
+# Pooled OLS
+pooled_ols_lm_nearest <- lm(ntl ~ nearest_station_distance, data = buffer_k1)
+pooled_ols_lm_k1 <- lm(ntl ~ parcel_station_count, data = buffer_k1)
+pooled_ols_lm_k3 <- lm(ntl ~ parcel_station_count, data = buffer_k3)
+pooled_ols_lm_k5 <- lm(ntl ~ parcel_station_count, data = buffer_k5)
+
+pooled_ols_plm_k1 <- plm(ntl ~ parcel_station_count, data = panel_data_k1, model = "pooling")
+pooled_ols_plm_k3 <- plm(ntl ~ parcel_station_count, data = panel_data_k3, model = "pooling")
+pooled_ols_plm_k5 <- plm(ntl ~ parcel_station_count, data = panel_data_k5, model = "pooling")
+
+summary(pooled_ols_lm_nearest)
+summary(pooled_ols_lm_k1)
+summary(pooled_ols_plm_k1)
+summary(pooled_ols_plm_k3)
+summary(pooled_ols_plm_k5)
+```
+
+# Lag effects
+```{r}
+panel_lag_data_k1 <- as.data.table(panel_data_k1)
+panel_lag_data_k3 <- as.data.table(panel_data_k3)
+panel_lag_data_k5 <- as.data.table(panel_data_k5)
+
+panel_lag_data_nearest <- panel_lag_data_k1[order(buffer_id, year)]
+panel_lag_data_nearest[, nearest_lag1 := shift(nearest_station_distance, 1, type = "lag"), by = buffer_id]
+panel_lag_data_nearest[, nearest_lag2 := shift(nearest_station_distance, 2, type = "lag"), by = buffer_id]
+panel_lag_data_nearest[, nearest_lag3 := shift(nearest_station_distance, 3, type = "lag"), by = buffer_id]
+
+panel_lag_data_k1 <- panel_lag_data_k1[order(buffer_id, year)]
+panel_lag_data_k1[, Station_lag1 := shift(parcel_station_count, 1, type = "lag"), by = buffer_id]
+panel_lag_data_k1[, Station_lag2 := shift(parcel_station_count, 2, type = "lag"), by = buffer_id]
+panel_lag_data_k1[, Station_lag3 := shift(parcel_station_count, 3, type = "lag"), by = buffer_id]
+
+panel_lag_data_k3 <- panel_lag_data_k3[order(buffer_id, year)]
+panel_lag_data_k3[, Station_lag1 := shift(parcel_station_count, 1, type = "lag"), by = buffer_id]
+panel_lag_data_k3[, Station_lag2 := shift(parcel_station_count, 2, type = "lag"), by = buffer_id]
+panel_lag_data_k3[, Station_lag3 := shift(parcel_station_count, 3, type = "lag"), by = buffer_id]
+
+panel_lag_data_k5 <- panel_lag_data_k5[order(buffer_id, year)]
+panel_lag_data_k5[, Station_lag1 := shift(parcel_station_count, 1, type = "lag"), by = buffer_id]
+panel_lag_data_k5[, Station_lag2 := shift(parcel_station_count, 2, type = "lag"), by = buffer_id]
+panel_lag_data_k5[, Station_lag3 := shift(parcel_station_count, 3, type = "lag"), by = buffer_id]
+```
+
+```{r}
+# remove geometry
+panel_lag_data_nearest <- panel_lag_data_nearest %>%
+  dplyr::select(-geometry)
+panel_lag_data_k1 <- panel_lag_data_k1 %>%
+  dplyr::select(-geometry)
+panel_lag_data_k3 <- panel_lag_data_k3 %>%
+  dplyr::select(-geometry)
+panel_lag_data_k5 <- panel_lag_data_k5 %>%
+  dplyr::select(-geometry)
+
+# pdata.frame
+panel_lag_data_nearest <- pdata.frame(panel_lag_data_nearest, index = c("buffer_id", "year"))
+panel_lag_data_k1 <- pdata.frame(panel_lag_data_k1, index = c("buffer_id", "year"))
+panel_lag_data_k3 <- pdata.frame(panel_lag_data_k3, index = c("buffer_id", "year"))
+panel_lag_data_k5 <- pdata.frame(panel_lag_data_k5, index = c("buffer_id", "year"))
+```
+
+```{r}
+# negative binomial with fixed effects
+lag_nearest <- plm(ntl ~ nearest_station_distance + nearest_lag1 + nearest_lag2 + nearest_lag3 + factor(year), data = panel_lag_data_nearest)
+
+lag_k1 <- fenegbin(ntl ~ parcel_station_count + Station_lag1 +Station_lag2 + Station_lag3 | year, data = panel_lag_data_k1)
+lag_k3 <- fenegbin(ntl ~ parcel_station_count + Station_lag1 +Station_lag2 + Station_lag3 | year, data = panel_lag_data_k3)
+lag_k5 <- fenegbin(ntl ~ parcel_station_count + Station_lag1 +Station_lag2 + Station_lag3 | year, data = panel_lag_data_k5)
+
+summary(lag_nearest)
+summary(lag_k1)
+summary(lag_k3)
+summary(lag_k5)
+```
